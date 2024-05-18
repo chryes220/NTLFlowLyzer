@@ -5,6 +5,7 @@ import glob
 
 from NTLFlowLyzer.config_loader import ConfigLoader
 from .network_flow_analyzer import NTLFlowLyzer
+from .live_network_sniffer import LiveNetworkSniffer
 
 def args_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog='NTLFlowLyzer')
@@ -16,6 +17,7 @@ def args_parser() -> argparse.ArgumentParser:
     parser.add_argument('-cb', '--continues-batch-mode', action='store_true',
                         help='Continues batch mode. Analyze files in the given directory continuously.'
                             ' Default is False.')
+    parser.add_argument('-i', '--interface', action='store', help='Network interface name for live capturing.')
     return parser
 
 
@@ -30,9 +32,18 @@ def main():
     parsed_arguments = args_parser().parse_args()
     config_file_address = "./NTLFlowLyzer/config.json" if parsed_arguments.config_file is None else parsed_arguments.config_file
     online_capturing = parsed_arguments.online_capturing
+    interface = parsed_arguments.interface
+
+    if interface is not None:
+        print(">> Interface is specified. Going for live capturing!")
+        config = ConfigLoader(config_file_address)
+        live_network_sniffer = LiveNetworkSniffer(interface, config, 30)
+        live_network_sniffer.run()
+        return
+    
     if not parsed_arguments.batch_mode:
         config = ConfigLoader(config_file_address)
-        network_flow_analyzer = NTLFlowLyzer(config, online_capturing, parsed_arguments.continues_batch_mode)
+        network_flow_analyzer = NTLFlowLyzer(config, online_capturing, interface, parsed_arguments.continues_batch_mode)
         network_flow_analyzer.run()
         return
 
