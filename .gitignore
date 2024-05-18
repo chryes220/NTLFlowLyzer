@@ -4,3 +4,4 @@ build
 dist
 *.csv
 *.swp
+__pycache__
