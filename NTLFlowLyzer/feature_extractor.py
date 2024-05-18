@@ -372,10 +372,12 @@ class FeatureExtractor(object):
 
     def execute(self, data: list, data_lock, flows: List[Flow], features_ignore_list: list = [],
             label: str = "") -> list:
+        # Ignore warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
 
             self.__extracted_data = []
+            # Iterate over each flow
             for flow in flows:
                 features_of_flow = {}
                 features_of_flow["flow_id"] = str(flow)
@@ -385,21 +387,47 @@ class FeatureExtractor(object):
                 features_of_flow["dst_ip"] = flow.get_dst_ip()
                 features_of_flow["dst_port"] = flow.get_dst_port()
                 features_of_flow["protocol"] = flow.get_protocol()
-                feature: Feature
+                # Iterate over each feature
                 for feature in self.__features:
+                    # Skip features in ignore list
                     if feature.name in features_ignore_list:
                         continue
                     feature.set_floating_point_unit(self.floating_point_unit)
                     try:
+                        # Extract feature value for the flow
                         features_of_flow[feature.name] = feature.extract(flow)
                     except Exception as e:
-                        print(f">>> Error occured in extracting the '{feature.name}' for '{flow}' flow.")
+                        # Handle extraction errors
+                        print(f">>> Error occurred in extracting the '{feature.name}' for '{flow}' flow.")
                         print(f">>> Error message: {e}")
                         print(110*"=")
                         features_of_flow[feature.name] = None
                         continue
                 features_of_flow["label"] = label
                 self.__extracted_data.append(features_of_flow.copy())
-                # print(len(features_of_flow))
+            # Add extracted data to the main data list
             with data_lock:
                 data.extend(self.__extracted_data)
+
+    def execute_single_flow(self, flow: Flow, features_ignore_list: list = []) -> dict:
+        extracted_data = {}
+        extracted_data["flow_id"] = str(flow)
+        extracted_data["timestamp"] = datetime.fromtimestamp(float(flow.get_timestamp()))
+        extracted_data["src_ip"] = flow.get_src_ip()
+        extracted_data["src_port"] = flow.get_src_port()
+        extracted_data["dst_ip"] = flow.get_dst_ip()
+        extracted_data["dst_port"] = flow.get_dst_port()
+        extracted_data["protocol"] = flow.get_protocol()
+        for feature in self.__features:
+            if feature.name in features_ignore_list:
+                continue
+            feature.set_floating_point_unit(self.floating_point_unit)
+            try:
+                extracted_data[feature.name] = feature.extract(flow)
+            except Exception as e:
+                print(f">>> Error occurred in extracting the '{feature.name}' for '{flow}' flow.")
+                print(f">>> Error message: {e}")
+                print(110*"=")
+                extracted_data[feature.name] = None
+                continue
+        return extracted_data
