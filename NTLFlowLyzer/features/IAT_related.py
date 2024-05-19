@@ -18,7 +18,7 @@ class PacketsIATMean(Feature):
 
 
 class PacketsIATStd(Feature):
-    name = "packet_IAT_std"
+    name = "packets_IAT_std"
     def extract(self, flow: Flow) -> float:
         times = utils.calculate_IAT(flow.get_packets())
         try:
@@ -28,7 +28,7 @@ class PacketsIATStd(Feature):
 
 
 class PacketsIATMax(Feature):
-    name = "packet_IAT_max"
+    name = "packets_IAT_max"
     def extract(self, flow: Flow) -> float:
         times = utils.calculate_IAT(flow.get_packets())
         if times:
@@ -37,7 +37,7 @@ class PacketsIATMax(Feature):
 
 
 class PacketsIATMin(Feature):
-    name = "packet_IAT_min"
+    name = "packets_IAT_min"
     def extract(self, flow: Flow) -> float:
         times = utils.calculate_IAT(flow.get_packets())
         if times:
@@ -46,7 +46,7 @@ class PacketsIATMin(Feature):
 
 
 class PacketsIATSum(Feature):
-    name = "packet_IAT_total"
+    name = "packets_IAT_total"
     def extract(self, flow: Flow) -> float:
         times = utils.calculate_IAT(flow.get_packets())
         if times:
