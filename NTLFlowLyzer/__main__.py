@@ -18,6 +18,8 @@ def args_parser() -> argparse.ArgumentParser:
                         help='Continues batch mode. Analyze files in the given directory continuously.'
                             ' Default is False.')
     parser.add_argument('-i', '--interface', action='store', help='Network interface name for live capturing.')
+    parser.add_argument('-m', '--model', action='store', choices=['xgb-no-bot', 'xgb-no-dos-hulk', 'xgb-no-dos-slowloris', 'xgb-no-heartbleed'], 
+                        help='Model name for the classification.\nOptions: xgb-no-bot, xgb-no-dos-hulk, xgb-no-dos-slowloris, xgb-no-heartbleed')
     return parser
 
 
@@ -33,6 +35,7 @@ def main():
     config_file_address = "./NTLFlowLyzer/config.json" if parsed_arguments.config_file is None else parsed_arguments.config_file
     online_capturing = parsed_arguments.online_capturing
     interface = parsed_arguments.interface
+    model = parsed_arguments.model
 
     if interface is not None:
         print(">> Interface is specified. Going for live capturing!")
