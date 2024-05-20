@@ -98,3 +98,7 @@ class Packet():
 
     def get_segment_size(self):
         return self.__segment_size
+    
+    def get_flow_id(self):
+        # format of flow_id: src_ip:src_port-dst_ip:dst_port-protocol
+        return self.src_ip + ":" + str(self.src_port) + "-" + self.dst_ip + ":" + str(self.dst_port) + "-" + self.protocol

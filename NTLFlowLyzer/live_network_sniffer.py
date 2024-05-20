@@ -1,5 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import json
+import sys
 import threading
 import time
 import os
@@ -7,11 +8,10 @@ from multiprocessing import Pool
 from queue import Queue
 import numpy as np
 import pkg_resources
-from scapy.all import sniff, IP, TCP, UDP, ICMP, Ether
+from scapy.all import sniff, IP, TCP, Ether
 from .network_flow_capturer.packet import Packet  # Ensure correct import based on project structure
 from .network_flow_capturer.flow import Flow  # Ensure correct import based on project structure
 from .feature_extractor import FeatureExtractor  # Add appropriate import based on your project
-from .writers.writer import Writer, CSVWriter  # Add appropriate import based on your project
 from .config_loader import ConfigLoader
 from .model import Model 
 
@@ -37,6 +37,7 @@ class LiveNetworkSniffer:
         self.log_writer_thread = threading.Thread(target=self.log_writer_worker, name="CSV Writer Thread")
 
         self.config = config
+        self.feature_extractor = FeatureExtractor(self.config.floating_point_unit)
 
         # load model
         try:
@@ -55,7 +56,7 @@ class LiveNetworkSniffer:
                 model_path = os.path.join(models_dir, 'xgb_no_bot.joblib')
         except Exception as e:
             print(f"Error loading model: {e}")
-            exit(1)
+            sys.exit(1)
 
         self.model = Model(model, model_path)
         self.feature_keys = ['duration', 'fwd_packets_count', 'fwd_total_payload_bytes', 'fwd_payload_bytes_max',
@@ -67,7 +68,7 @@ class LiveNetworkSniffer:
                              'down_up_rate', 'fwd_init_win_bytes', 'bwd_init_win_bytes', 'fwd_segment_size_min',
                              'active_mean', 'active_std', 'idle_std']
 
-        self.log_filename = r'C:\Users\ACER\Documents\GitHub\NTLFlowLyzer\log.json'
+        self.log_filename = r'/var/log/ntlflyzer/ntlflyzer.log'
 
         # Initialize and start threads
         self.sniffer_thread.start()
@@ -177,7 +178,6 @@ class LiveNetworkSniffer:
         print(">> Sniffer stopped...")
 
     def feature_extraction_worker(self):
-        self.feature_extractor = FeatureExtractor(self.config.floating_point_unit)
         # checks if the feature extraction queue is empty
         while not self.stop_sniffing.is_set():
             if not self.feature_extraction_queue.empty():
@@ -196,7 +196,7 @@ class LiveNetworkSniffer:
             if not self.ml_predictor_queue.empty():
                 with self.ml_predictor_queue_lock:
                     flow_dict = self.ml_predictor_queue.get()
-                print(f"Flow {flow_dict['flow_id']} prediction started...")
+                # print(f"Flow {flow_dict['flow_id']} prediction started...")
                 # print(f"Flow {flow_dict['flow_id']} features: {flow_dict}\n")
                 x = np.array([flow_dict[key] for key in self.feature_keys], dtype=float)
                 x = x.reshape(1, -1)
@@ -209,7 +209,7 @@ class LiveNetworkSniffer:
                     continue
                 prediction_duration = time.time() - start
 
-                result = dict()
+                result = {}
                 result['flow_id'] = flow_dict['flow_id']
                 result['timestamp'] = flow_dict['timestamp']
                 result['src_ip'] = flow_dict['src_ip']
@@ -220,7 +220,7 @@ class LiveNetworkSniffer:
                 result['label'] = int(prediction[0])
                 result['prediction_duration'] = prediction_duration
 
-                print(f"Flow {flow_dict['flow_id']} prediction completed with prediction: {prediction[0]}.\n")
+                # print(f"Flow {flow_dict['flow_id']} prediction completed with prediction: {prediction[0]}.\n")
 
                 with self.log_writer_queue_lock:
                     self.log_writer_queue.put(result)
@@ -231,16 +231,16 @@ class LiveNetworkSniffer:
                 if not self.log_writer_queue.empty():
                     with self.log_writer_queue_lock:
                         # write to self.log_filename
-                        prediciton = self.log_writer_queue.get()
+                        prediction = self.log_writer_queue.get()
                         # convert timestamp from datetime to string
                         try:
-                            prediciton['timestamp'] = prediciton['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
-                            json.dump(prediciton, f)
+                            prediction['timestamp'] = prediction['timestamp'].astimezone(timezone.utc).isoformat()
+                            json.dump(prediction, f)
                             f.write('\n')
                         except Exception as e:
-                            print(f"Error writing flow {prediciton['flow_id']} to log: {e}")
+                            print(f"Error writing flow {prediction['flow_id']} to log: {e}")
                             continue
-                    print(f"Flow {prediciton['flow_id']} logged.\n")
+                    # print(f"Flow {prediction['flow_id']} logged.\n")
 
     def run(self):
         try:
@@ -262,7 +262,7 @@ class LiveNetworkSniffer:
                         # write to self.log_filename
                         prediction = self.log_writer_queue.get()
                         # convert timestamp from datetime to string
-                        prediction['timestamp'] = prediction['timestamp'].strftime('%Y-%m-%d %H:%M:%S')
+                        prediction['timestamp'] = prediction['timestamp'].astimezone(timezone.utc).isoformat()
                         json.dump(prediction, f)
                         f.write('\n')
 

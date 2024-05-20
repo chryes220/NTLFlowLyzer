@@ -47,8 +47,10 @@ class Flow(object):
         self.blastBulkTS = 0
 
     def __str__(self):
-        return "_".join([str(self.src_ip), str(self.src_port), str(self.dst_ip), str(self.dst_port),
-                         str(self.protocol), str(datetime.fromtimestamp(float(self.flow_start_time)))])
+        # return "_".join([str(self.src_ip), str(self.src_port), str(self.dst_ip), str(self.dst_port),
+        #                  str(self.protocol), str(datetime.fromtimestamp(float(self.flow_start_time)))])
+        # format of flow_id: src_ip:src_port-dst_ip:dst_port-protocol
+        return self.src_ip + ":" + str(self.src_port) + "-" + self.dst_ip + ":" + str(self.dst_port) + "-" + self.protocol
 
     def get_src_ip(self):
         return self.src_ip
