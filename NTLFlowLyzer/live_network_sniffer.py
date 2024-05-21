@@ -4,11 +4,11 @@ import sys
 import threading
 import time
 import os
-from multiprocessing import Pool
-from queue import Queue
 import numpy as np
 import pkg_resources
-from scapy.all import sniff, IP, TCP, Ether
+from multiprocessing import Pool
+from queue import Queue
+from scapy.all import sniff, IP, TCP, UDP, ICMP, Ether
 from .network_flow_capturer.packet import Packet  # Ensure correct import based on project structure
 from .network_flow_capturer.flow import Flow  # Ensure correct import based on project structure
 from .feature_extractor import FeatureExtractor  # Add appropriate import based on your project
@@ -21,20 +21,30 @@ class LiveNetworkSniffer:
         self.iface = iface
         self.ongoing_flows = {}
         self.timeout = timeout
+        self.num_threads = 4
         self.stop_sniffing = threading.Event()
 
+        self.packet_queue = Queue()
         self.feature_extraction_queue = Queue()
         self.ml_predictor_queue = Queue()
         self.log_writer_queue = Queue()
 
+        self.packet_queue_lock = threading.Lock()
         self.feature_extraction_queue_lock = threading.Lock()
         self.ml_predictor_queue_lock = threading.Lock()
         self.log_writer_queue_lock = threading.Lock()
+        self.ongoing_flows_lock = threading.Lock()
 
         self.sniffer_thread = threading.Thread(target=self.start_sniffing, name="Sniffer Thread")
-        self.feature_extraction_thread = threading.Thread(target=self.feature_extraction_worker, name="Feature Extraction Thread")
-        self.ml_predictor_thread = threading.Thread(target=self.ml_predictor_worker, name="ML Predictor Thread")
-        self.log_writer_thread = threading.Thread(target=self.log_writer_worker, name="CSV Writer Thread")
+        # self.packet_handler_thread = threading.Thread(target=self.packet_handler, name="Packet Handler Thread")
+        # self.feature_extraction_thread = threading.Thread(target=self.feature_extraction_worker, name="Feature Extraction Thread")
+        # self.ml_predictor_thread = threading.Thread(target=self.ml_predictor_worker, name="ML Predictor Thread")
+        # self.log_writer_thread = threading.Thread(target=self.log_writer_worker, name="CSV Writer Thread")
+        
+        self.packet_handler_thread = [threading.Thread(target=self.packet_handler) for _ in range(3)]
+        self.feature_extraction_thread = [threading.Thread(target=self.feature_extraction_worker) for _ in range(3)]
+        self.ml_predictor_thread = [threading.Thread(target=self.ml_predictor_worker) for _ in range(3)]
+        self.log_writer_thread = [threading.Thread(target=self.log_writer_worker) for _ in range(3)]
 
         self.config = config
         self.feature_extractor = FeatureExtractor(self.config.floating_point_unit)
@@ -68,74 +78,119 @@ class LiveNetworkSniffer:
                              'down_up_rate', 'fwd_init_win_bytes', 'bwd_init_win_bytes', 'fwd_segment_size_min',
                              'active_mean', 'active_std', 'idle_std']
 
-        self.log_filename = r'/var/log/ntlflyzer/ntlflyzer.log'
+        self.log_filename = r'/var/log/ntlflyzer.json'
 
+        # self.worker_threads = [threading.Thread(target=self.packet_handler) for _ in range(num_worker_threads)]
+        # self.sniffer_threads = [threading.Thread(target=self.start_sniffing) for _ in range(10)]
+        
         # Initialize and start threads
         self.sniffer_thread.start()
-        self.feature_extraction_thread.start()
-        self.ml_predictor_thread.start()
-        self.log_writer_thread.start()
+        # self.packet_handler_thread.start()
+        # self.feature_extraction_thread.start()
+        # self.ml_predictor_thread.start()
+        # self.log_writer_thread.start()
 
-    def packet_handler(self, packet):
-        try:
-            new_buf = bytes(packet)
-            eth = Ether(new_buf)
+        for packet_handler_thread in self.packet_handler_thread:
+            packet_handler_thread.start()
+        for feature_extraction_thread in self.feature_extraction_thread:
+            feature_extraction_thread.start()
+        for ml_predictor_thread in self.ml_predictor_thread:
+            ml_predictor_thread.start()
+        for log_writer_thread in self.log_writer_thread:
+            log_writer_thread.start()
 
-            decapsulation = True
-            while decapsulation:
-                if not isinstance(eth.payload, IP):
-                    decapsulation = False
-                    break
-                ip = eth.payload
-                if (ip.src == self.config.vxlan_ip) or (ip.dst == self.config.vxlan_ip):
-                    if not ((ip.src == self.config.vxlan_ip and ip.dst.startswith("10.0.")) or (ip.dst == self.config.vxlan_ip and ip.src.startswith("10.0."))):
-                        decapsulation = False
-                        break
+        # for sniffer_thread in self.sniffer_threads:
+        #     sniffer_thread.start()
 
-                    new_buf = bytes(eth.payload.payload.payload)
-                    print(f"Decapsulated packet: {new_buf}")
+    def get_packet(self, packet):
+        self.packet_queue.put(packet)
+        print(f"Packet: {packet}")
+
+    def packet_handler(self):
+        while not self.stop_sniffing.is_set():
+            # if not self.packet_queue_lock.acquire(blocking=False):
+            #     continue
+            # print("A")
+            if not self.packet_queue.empty():
+                # with self.packet_queue_lock:
+                # print("B")
+                packet = self.packet_queue.get()
+                
+                try:
+                    # Convert packet to bytes
+                    new_buf = bytes(packet)
+                    # print(f"Packet: {packet}")
+                    # Decapsulate VXLAN packets
                     eth = Ether(new_buf)
-                else:
-                    decapsulation = False
-                    break
+                    # print(f"Packet: {eth}")
+                    decapsulation = True
+                    while decapsulation:
+                        if not isinstance(eth.payload, IP):
+                            decapsulation = False
+                            break
+                        ip = eth.payload
+                        if (ip.src == self.config.vxlan_ip) or (ip.dst == self.config.vxlan_ip):
+                            if not ((ip.src == self.config.vxlan_ip and ip.dst.startswith("10.0.")) or (ip.dst == self.config.vxlan_ip and ip.src.startswith("10.0."))):
+                                decapsulation = False
+                                break
+                            # Decapsulate the inner packet
+                            new_buf = bytes(eth.payload.payload.payload)
+                            print(f"Decapsulated packet: {new_buf}")
+                            eth = Ether(new_buf)
+                        else:
+                            decapsulation = False
+                            break
 
-            if not isinstance(eth.payload, IP):
-                return
-            ip = eth.payload
-            # print(f"IP packet: {ip}")
+                    if not isinstance(eth.payload, IP):
+                        print(f"!! Not an IP packet: {eth.payload}\n")
+                        continue
+                    ip = eth.payload
 
-            if not isinstance(ip.payload, TCP):
-                return
+                    # print(f"Payload: {ip}")
 
-            tcp_layer = ip.payload
-            network_protocol = 'TCP'
-            window_size = tcp_layer.window
-            tcp_flags = tcp_layer.flags
-            seq_number = tcp_layer.seq
-            ack_number = tcp_layer.ack
+                    # Extract TCP layer information
+                    network_protocol = 'UNKNOWN'
+                    if isinstance(ip.payload, TCP):
+                        transport_layer = ip.payload
+                        network_protocol = 'TCP'
+                    elif isinstance(ip.payload, UDP):
+                        transport_layer = ip.payload
+                        network_protocol = 'UDP'
+                    elif isinstance(ip.payload, ICMP):
+                        transport_layer = ip.payload
+                        network_protocol = 'ICMP'
+                    else:
+                        continue
+                    
+                    window_size = getattr(transport_layer, 'window', 0)
+                    tcp_flags = getattr(transport_layer, 'flags', 0)
+                    seq_number = getattr(transport_layer, 'seq', 0)
+                    ack_number = getattr(transport_layer, 'ack', 0)
 
-            nlflyzer_packet = Packet(
-                src_ip=ip.src, 
-                src_port=tcp_layer.sport,
-                dst_ip=ip.dst, 
-                dst_port=tcp_layer.dport,
-                protocol=network_protocol, 
-                flags=tcp_flags,
-                timestamp=packet.time, 
-                length=len(new_buf),
-                payloadbytes=len(tcp_layer.payload), 
-                header_size=len(ip.payload) - len(tcp_layer.payload),
-                window_size=window_size,
-                seq_number=seq_number,
-                ack_number=ack_number)
+                    # Create a NTLFlowLyzer packet object
+                    nlflyzer_packet = Packet(
+                        src_ip=ip.src, 
+                        src_port=getattr(transport_layer, 'sport', 0),
+                        dst_ip=ip.dst, 
+                        dst_port=getattr(transport_layer, 'dport', 0),
+                        protocol=network_protocol, 
+                        flags=tcp_flags,
+                        timestamp=packet.time, 
+                        length=len(new_buf),
+                        payloadbytes=len(transport_layer.payload), 
+                        header_size=len(ip.payload) - len(transport_layer.payload),
+                        window_size=window_size,
+                        seq_number=seq_number,
+                        ack_number=ack_number)
 
-            self.add_packet_to_flow(nlflyzer_packet)
+                    # Add the packet to the ongoing flow
+                    self.add_packet_to_flow(nlflyzer_packet)
 
-        except Exception as e:
-            print(f"!! Exception happened!")
-            print(e)
-            print(30*"*")
-            return
+                except Exception as e:
+                    print(f"!! Exception happened!")
+                    print(e)
+                    print(30*"*")
+                    continue
        
     def add_packet_to_flow(self, packet: Packet):
         flow_id = packet.get_flow_id()
@@ -143,20 +198,21 @@ class LiveNetworkSniffer:
         
         to_remove = []
         
-        if flow_id in self.ongoing_flows:
-            # print(f"Flow {flow_id} already exists")
-            flow = self.ongoing_flows[flow_id]
-            flow.add_packet(packet)
-            flow.flow_last_seen = current_time
-            if self.is_finished_flow(flow, packet):
-                # print(f"Flow {flow_id} is finished")
-                to_remove.append(flow_id)
-        else:
-            flow = Flow(packet, self.timeout)
-            self.ongoing_flows[flow_id] = flow
-            # print(f"New flow started: {flow_id}")
-        # print("To remove: ", len(to_remove))
-        with self.feature_extraction_queue_lock:
+        with self.ongoing_flows_lock:
+            if flow_id in self.ongoing_flows:
+                # print(f"Flow {flow_id} already exists")
+                flow = self.ongoing_flows[flow_id]
+                flow.add_packet(packet)
+                flow.flow_last_seen = current_time
+                if self.is_finished_flow(flow, packet):
+                    # print(f"Flow {flow_id} is finished")
+                    to_remove.append(flow_id)
+            else:
+                flow = Flow(packet, self.timeout)
+                self.ongoing_flows[flow_id] = flow
+                # print(f"New flow started: {flow_id}")
+            # print("To remove: ", len(to_remove))
+            # with self.feature_extraction_queue_lock:
             for flow_id in to_remove:
                 self.feature_extraction_queue.put(self.ongoing_flows[flow_id])
                 del self.ongoing_flows[flow_id]
@@ -174,28 +230,38 @@ class LiveNetworkSniffer:
 
     def start_sniffing(self):
         print(">> Sniffer started...")
-        sniff(iface=self.iface, prn=self.packet_handler, stop_filter=lambda p: self.stop_sniffing.is_set())
+        sniff(iface=self.iface, prn=self.packet_queue.put, stop_filter=lambda p: self.stop_sniffing.is_set())
+        # sniffer = pcap.pcap(name=self.iface, promisc=True, immediate=True, timeout_ms=1000)
+        # for ts, pkt in sniffer:
+        #     if self.stop_sniffing.is_set():
+        #         break
+        #     with self.packet_queue_lock:
+        #         self.packet_queue.put(pkt)
         print(">> Sniffer stopped...")
 
     def feature_extraction_worker(self):
         # checks if the feature extraction queue is empty
         while not self.stop_sniffing.is_set():
             if not self.feature_extraction_queue.empty():
+                # if not self.feature_extraction_queue_lock.acquire(blocking=False):
+                #     continue
                 # print(f"Number of flows in feature extraction queue: {self.feature_extraction_queue.qsize()}")
-                with self.feature_extraction_queue_lock:
-                    flow = self.feature_extraction_queue.get()
+                # with self.feature_extraction_queue_lock:
+                flow = self.feature_extraction_queue.get()
                 extracted_flow = self.feature_extractor.execute_single_flow(flow)
                 
-                with self.ml_predictor_queue_lock:
-                    self.ml_predictor_queue.put(extracted_flow)
+                # with self.ml_predictor_queue_lock:
+                self.ml_predictor_queue.put(extracted_flow)
                 # print(f"Flow {str(flow)} feature extraction completed.\n")
 
     def ml_predictor_worker(self):
         # checks if the ml prediction queue is empty
         while not self.stop_sniffing.is_set():
             if not self.ml_predictor_queue.empty():
-                with self.ml_predictor_queue_lock:
-                    flow_dict = self.ml_predictor_queue.get()
+                # if not self.ml_predictor_queue_lock.acquire(blocking=False):
+                #     continue
+                # with self.ml_predictor_queue_lock:
+                flow_dict = self.ml_predictor_queue.get()
                 # print(f"Flow {flow_dict['flow_id']} prediction started...")
                 # print(f"Flow {flow_dict['flow_id']} features: {flow_dict}\n")
                 x = np.array([flow_dict[key] for key in self.feature_keys], dtype=float)
@@ -222,30 +288,33 @@ class LiveNetworkSniffer:
 
                 # print(f"Flow {flow_dict['flow_id']} prediction completed with prediction: {prediction[0]}.\n")
 
-                with self.log_writer_queue_lock:
-                    self.log_writer_queue.put(result)
+                # with self.log_writer_queue_lock:
+                self.log_writer_queue.put(result)
 
     def log_writer_worker(self):
         with open(self.log_filename, 'a') as f:
             while not self.stop_sniffing.is_set():
                 if not self.log_writer_queue.empty():
-                    with self.log_writer_queue_lock:
+                    # if not self.log_writer_queue_lock.acquire(blocking=False):
+                    #     continue
+                    # with self.log_writer_queue_lock:
                         # write to self.log_filename
-                        prediction = self.log_writer_queue.get()
-                        # convert timestamp from datetime to string
-                        try:
-                            prediction['timestamp'] = prediction['timestamp'].astimezone(timezone.utc).isoformat()
-                            json.dump(prediction, f)
-                            f.write('\n')
-                        except Exception as e:
-                            print(f"Error writing flow {prediction['flow_id']} to log: {e}")
-                            continue
+                    prediction = self.log_writer_queue.get()
+                    # convert timestamp from datetime to string
+                    try:
+                        prediction['timestamp'] = prediction['timestamp'].astimezone(timezone.utc).isoformat()
+                        json.dump(prediction, f)
+                        f.write('\n')
+                    except Exception as e:
+                        print(f"Error writing flow {prediction['flow_id']} to log: {e}")
+                        continue
                     # print(f"Flow {prediction['flow_id']} logged.\n")
 
     def run(self):
         try:
             while not self.stop_sniffing.is_set():
                 time.sleep(10)
+                print(f"Number of captured packets: {self.packet_queue.qsize()}")
                 print(f"Number of ongoing flows: {len(self.ongoing_flows)}")
                 print(f"Number of flows in feature extraction queue: {self.feature_extraction_queue.qsize()}")
                 print(f"Number of flows in ML predictor queue: {self.ml_predictor_queue.qsize()}")
@@ -258,18 +327,33 @@ class LiveNetworkSniffer:
             print("Writing remaining items in log writer queue...")
             with open(self.log_filename, 'a') as f:
                 while not self.log_writer_queue.empty():
-                    with self.log_writer_queue_lock:
-                        # write to self.log_filename
-                        prediction = self.log_writer_queue.get()
-                        # convert timestamp from datetime to string
-                        prediction['timestamp'] = prediction['timestamp'].astimezone(timezone.utc).isoformat()
-                        json.dump(prediction, f)
-                        f.write('\n')
+                    # with self.log_writer_queue_lock:
+                    # write to self.log_filename
+                    prediction = self.log_writer_queue.get()
+                    # convert timestamp from datetime to string
+                    prediction['timestamp'] = prediction['timestamp'].astimezone(timezone.utc).isoformat()
+                    json.dump(prediction, f)
+                    f.write('\n')
 
+            # stop all threads
             self.sniffer_thread.join()
-            self.feature_extraction_thread.join()
-            self.ml_predictor_thread.join()
-            self.log_writer_thread.join()
+            # self.packet_handler_thread.join()
+            # self.feature_extraction_thread.join()
+            # self.ml_predictor_thread.join()
+            # self.log_writer_thread.join()
+
+            for packet_handler_thread in self.packet_handler_thread:
+                packet_handler_thread.join()
+            for feature_extraction_thread in self.feature_extraction_thread:
+                feature_extraction_thread.join()
+            for ml_predictor_thread in self.ml_predictor_thread:
+                ml_predictor_thread.join()
+            for log_writer_thread in self.log_writer_thread:
+                log_writer_thread.join()
+
+            # for sniffer_thread in self.sniffer_threads:
+            #     sniffer_thread.join()
+
             print("Sniffer thread joined, cleanup complete.")
 
 # Usage example
