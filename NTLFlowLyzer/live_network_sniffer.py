@@ -39,12 +39,12 @@ class LiveNetworkSniffer:
         # self.packet_handler_thread = threading.Thread(target=self.packet_handler, name="Packet Handler Thread")
         # self.feature_extraction_thread = threading.Thread(target=self.feature_extraction_worker, name="Feature Extraction Thread")
         # self.ml_predictor_thread = threading.Thread(target=self.ml_predictor_worker, name="ML Predictor Thread")
-        # self.log_writer_thread = threading.Thread(target=self.log_writer_worker, name="CSV Writer Thread")
+        self.log_writer_thread = threading.Thread(target=self.log_writer_worker, name="CSV Writer Thread")
         
         self.packet_handler_thread = [threading.Thread(target=self.packet_handler) for _ in range(3)]
         self.feature_extraction_thread = [threading.Thread(target=self.feature_extraction_worker) for _ in range(3)]
         self.ml_predictor_thread = [threading.Thread(target=self.ml_predictor_worker) for _ in range(3)]
-        self.log_writer_thread = [threading.Thread(target=self.log_writer_worker) for _ in range(3)]
+        # self.log_writer_thread = [threading.Thread(target=self.log_writer_worker) for _ in range(3)]
 
         self.config = config
         self.feature_extractor = FeatureExtractor(self.config.floating_point_unit)
@@ -88,7 +88,7 @@ class LiveNetworkSniffer:
         # self.packet_handler_thread.start()
         # self.feature_extraction_thread.start()
         # self.ml_predictor_thread.start()
-        # self.log_writer_thread.start()
+        self.log_writer_thread.start()
 
         for packet_handler_thread in self.packet_handler_thread:
             packet_handler_thread.start()
@@ -96,8 +96,8 @@ class LiveNetworkSniffer:
             feature_extraction_thread.start()
         for ml_predictor_thread in self.ml_predictor_thread:
             ml_predictor_thread.start()
-        for log_writer_thread in self.log_writer_thread:
-            log_writer_thread.start()
+        # for log_writer_thread in self.log_writer_thread:
+        #     log_writer_thread.start()
 
         # for sniffer_thread in self.sniffer_threads:
         #     sniffer_thread.start()
@@ -142,7 +142,7 @@ class LiveNetworkSniffer:
                             break
 
                     if not isinstance(eth.payload, IP):
-                        print(f"!! Not an IP packet: {eth.payload}\n")
+                        # print(f"!! Not an IP packet: {eth.payload}\n")
                         continue
                     ip = eth.payload
 
@@ -340,7 +340,7 @@ class LiveNetworkSniffer:
             # self.packet_handler_thread.join()
             # self.feature_extraction_thread.join()
             # self.ml_predictor_thread.join()
-            # self.log_writer_thread.join()
+            self.log_writer_thread.join()
 
             for packet_handler_thread in self.packet_handler_thread:
                 packet_handler_thread.join()
@@ -348,8 +348,8 @@ class LiveNetworkSniffer:
                 feature_extraction_thread.join()
             for ml_predictor_thread in self.ml_predictor_thread:
                 ml_predictor_thread.join()
-            for log_writer_thread in self.log_writer_thread:
-                log_writer_thread.join()
+            # for log_writer_thread in self.log_writer_thread:
+            #     log_writer_thread.join()
 
             # for sniffer_thread in self.sniffer_threads:
             #     sniffer_thread.join()
