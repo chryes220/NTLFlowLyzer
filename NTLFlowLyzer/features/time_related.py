@@ -193,8 +193,9 @@ class Handshake(Feature):
 
     def extract_data_from_handshaking_process(self, flow: Flow):
         if flow.get_protocol() != "TCP":
-            self.delta = "not a tcp connection"
-            self.duration = "not a tcp connection"
+            self.delta = 0
+            self.duration = 0
+            self.final_state = HandshakingStates.Ideal
             return
 
         packets = flow.get_packets()

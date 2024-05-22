@@ -15,7 +15,7 @@ from dpkt import ethernet
 
 
 class NTLFlowLyzer(object):
-    def __init__(self, config: ConfigLoader, online_capturing: bool, continues_batch_mode: bool):
+    def __init__(self, config: ConfigLoader, continues_batch_mode: bool):
         self.__config = config
         self.__continues_batch_mode = continues_batch_mode
         warnings.filterwarnings("ignore")
