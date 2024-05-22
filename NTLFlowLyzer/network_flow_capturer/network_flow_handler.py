@@ -56,7 +56,7 @@ class NetworkFlowHandler:
           result['src_ip'] = extracted_features['src_ip']
           result['src_port'] = extracted_features['src_port']
           result['dst_ip'] = extracted_features['dst_ip']
-          result['src_port'] = extracted_features['src_port']
+          result['dst_port'] = extracted_features['dst_port']
           result['protocol'] = extracted_features['protocol']
           result['label'] = int(prediction[0])
           result['prediction_duration'] = prediction_duration
