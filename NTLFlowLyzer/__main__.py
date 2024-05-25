@@ -40,7 +40,7 @@ def main():
     if interface is not None:
         print(">> Interface is specified. Going for live capturing!")
         config = ConfigLoader(config_file_address)
-        live_network_sniffer = LiveNetworkSniffer(interface, config, 30, model)
+        live_network_sniffer = LiveNetworkSniffer(interface, config, model)
         live_network_sniffer.run()
         return
     

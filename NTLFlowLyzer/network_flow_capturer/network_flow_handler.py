@@ -12,9 +12,8 @@ from NTLFlowLyzer.network_flow_capturer.packet import Packet
 
 
 class NetworkFlowHandler:
-  def __init__(self, config: ConfigLoader, timeout: float, model: Model):
+  def __init__(self, config: ConfigLoader, model: Model):
     self.config = config
-    self.timeout = timeout
     self.stop_processsing = False
 
     self.feature_extractor = FeatureExtractor(self.config.floating_point_unit)
@@ -127,7 +126,7 @@ class NetworkFlowHandler:
       flow_id = alt_flow_id
 
     if flow is None:
-      flow = Flow(packet, self.timeout)
+      flow = Flow(packet, self.config.activity_timeout)
       self.ongoing_flows[str(flow)] = flow
       # print(f"Created new flow: {str(flow)}")
       return

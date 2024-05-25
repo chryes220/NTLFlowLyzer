@@ -17,10 +17,9 @@ from NTLFlowLyzer.config_loader import ConfigLoader
 
 
 class LiveNetworkSniffer:
-    def __init__(self, iface: str, config: ConfigLoader, timeout=30, model='xgb-no-bot'):
+    def __init__(self, iface: str, config: ConfigLoader, model='xgb-no-bot'):
         self.iface = iface
         self.config = config
-        self.timeout = timeout
         self.num_threads = 4
         self.log_filename = r'/var/log/ntlflyzer.json'
 
@@ -61,7 +60,7 @@ class LiveNetworkSniffer:
         self.flow_handler_finished = [Queue() for _ in range(self.num_threads)] # contains flow ids
         self.flow_handler_logs = [Queue() for _ in range(self.num_threads)]
         self.flow_handler_flags = [Event() for _ in range(self.num_threads)]
-        self.flow_handler_objects = [NetworkFlowHandler(self.config, self.timeout, self.model) for _ in range(self.num_threads)]
+        self.flow_handler_objects = [NetworkFlowHandler(self.config, self.model) for _ in range(self.num_threads)]
         self.flow_handler_threads = [Thread(target=flow_handler.run, args=(self.flow_handler_queues[i], self.flow_handler_logs[i], self.flow_handler_finished[i], self.stop_sniffing, self.flow_handler_flags[i]), name=f"Flow Handler Thread {i}") for i, flow_handler in enumerate(self.flow_handler_objects)]
 
         self.logger = logging.getLogger('log_writer')
