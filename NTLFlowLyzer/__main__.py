@@ -20,6 +20,7 @@ def args_parser() -> argparse.ArgumentParser:
     parser.add_argument('-i', '--interface', action='store', help='Network interface name for live capturing.')
     parser.add_argument('-m', '--model', action='store', choices=['xgb-no-bot', 'xgb-no-dos-hulk', 'xgb-no-dos-slowloris', 'xgb-no-heartbleed'], 
                         help='Model name for the classification.\nOptions: xgb-no-bot, xgb-no-dos-hulk, xgb-no-dos-slowloris, xgb-no-heartbleed')
+    parser.add_argument('-d', '--run-as-daemon', action='store_true', help='Run the program as a daemon.')
     return parser
 
 
@@ -46,7 +47,7 @@ def main():
     
     if not parsed_arguments.batch_mode:
         config = ConfigLoader(config_file_address)
-        network_flow_analyzer = NTLFlowLyzer(config, online_capturing, interface, parsed_arguments.continues_batch_mode)
+        network_flow_analyzer = NTLFlowLyzer(config, parsed_arguments.continues_batch_mode)
         network_flow_analyzer.run()
         return
 
@@ -61,7 +62,7 @@ def main():
         output_file_name = file.split('/')[-1]
         config.pcap_file_address = file
         config.output_file_address = f"{batch_address_output}/{output_file_name}.csv"
-        network_flow_analyzer = NTLFlowLyzer(config, online_capturing, parsed_arguments.continues_batch_mode)
+        network_flow_analyzer = NTLFlowLyzer(config, parsed_arguments.continues_batch_mode)
         network_flow_analyzer.run()
 
 
