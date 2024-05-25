@@ -46,6 +46,8 @@ class LiveNetworkSniffer:
                 model_path = os.path.join(models_dir, 'xgb_no_dos_slowloris.joblib')
             elif model == 'xgb-no-heartbleed':
                 model_path = os.path.join(models_dir, 'xgb_no_heartbleed.joblib')
+            elif model == 'oc-svm':
+                model_path = os.path.join(models_dir, 'ocsvm.joblib')
             else:
                 # default is xgb no bot
                 model_path = os.path.join(models_dir, 'xgb_no_bot.joblib')

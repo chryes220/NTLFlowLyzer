@@ -18,8 +18,8 @@ def args_parser() -> argparse.ArgumentParser:
                         help='Continues batch mode. Analyze files in the given directory continuously.'
                             ' Default is False.')
     parser.add_argument('-i', '--interface', action='store', help='Network interface name for live capturing.')
-    parser.add_argument('-m', '--model', action='store', choices=['xgb-no-bot', 'xgb-no-dos-hulk', 'xgb-no-dos-slowloris', 'xgb-no-heartbleed'], 
-                        help='Model name for the classification.\nOptions: xgb-no-bot, xgb-no-dos-hulk, xgb-no-dos-slowloris, xgb-no-heartbleed')
+    parser.add_argument('-m', '--model', action='store', choices=['xgb-no-bot', 'xgb-no-dos-hulk', 'xgb-no-dos-slowloris', 'xgb-no-heartbleed', 'oc-svm'], 
+                        help='Model name for the classification.\nOptions: xgb-no-bot, xgb-no-dos-hulk, xgb-no-dos-slowloris, xgb-no-heartbleed, oc-svm')
     return parser
 
 
