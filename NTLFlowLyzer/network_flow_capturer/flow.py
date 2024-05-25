@@ -46,6 +46,8 @@ class Flow(object):
         self.bbulkSizeHelper = 0
         self.blastBulkTS = 0
 
+        self.add_packet(packet)
+
     def __str__(self):
         # return "_".join([str(self.src_ip), str(self.src_port), str(self.dst_ip), str(self.dst_port),
         #                  str(self.protocol), str(datetime.fromtimestamp(float(self.flow_start_time)))])
