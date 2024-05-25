@@ -60,6 +60,11 @@ class NetworkFlowHandler:
     else:
       finished_reason = "activity_timeout"
 
+    if self.model.name == 'oc-svm':
+      if prediction[0] == -1:
+        prediction[0] = 1
+      else:
+        prediction[0] = 0
 
     result = {}
     result['flow_id'] = extracted_features['flow_id']
