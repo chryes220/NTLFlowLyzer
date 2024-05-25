@@ -21,7 +21,7 @@ class LiveNetworkSniffer:
         self.iface = iface
         self.config = config
         self.num_threads = 4
-        self.log_filename = r'/var/log/ntlflyzer.json'
+        self.log_filename = self.config.output_file_address
 
         self.stop_sniffing = Event()
 
