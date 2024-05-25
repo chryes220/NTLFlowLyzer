@@ -1,26 +1,19 @@
-from datetime import datetime, timezone
+from datetime import timezone
 import hashlib
 import json
 import logging
-from logging.handlers import QueueHandler, QueueListener
-import multiprocessing
 import sys
-import threading
 import time
 import os
-import numpy as np
 import pkg_resources
-from multiprocessing import Pool, Process
 from queue import Queue
 from scapy.all import sniff, IP, TCP, UDP, ICMP, Ether
 from threading import Event, Thread
 
 from NTLFlowLyzer.network_flow_capturer.network_flow_handler import NetworkFlowHandler
-from .network_flow_capturer.packet import Packet  # Ensure correct import based on project structure
-from .network_flow_capturer.flow import Flow  # Ensure correct import based on project structure
-from .feature_extractor import FeatureExtractor  # Add appropriate import based on your project
-from .config_loader import ConfigLoader
-from .model import Model 
+from NTLFlowLyzer.network_flow_capturer.packet import Packet
+from NTLFlowLyzer.model import Model
+from NTLFlowLyzer.config_loader import ConfigLoader 
 
 
 class LiveNetworkSniffer:
@@ -35,13 +28,11 @@ class LiveNetworkSniffer:
 
         self.existing_flows = {} # key: hash value of flow id, value: thread id
         self.packet_queue = Queue()
-        self.log_writer_queue = Queue()
 
         self.sniffer_thread = Thread(target=self.start_sniffing, name="Sniffer Thread")
         self.packet_handler_thread = Thread(target=self.packet_handling_worker, name="Packet Handler Thread")
         self.finished_flow_thread = Thread(target=self.finished_flow_handler, name="Finished Flow Thread")
         self.log_collector_thread = Thread(target=self.log_collector_worker, name="Log Collector Thread")
-        self.log_writer_thread = Thread(target=self.log_writer_worker, name="CSV Writer Thread")
   
         # load model
         try:
@@ -84,11 +75,11 @@ class LiveNetworkSniffer:
         self.packet_handler_thread.start()
         self.finished_flow_thread.start()
         self.log_collector_thread.start()
-        self.log_writer_thread.start()
         for p in self.flow_handler_threads:
             # print(f"Starting flow handler {p.name}...")
             p.start()
         # print()
+        print(f"Predicting with model: {self.model.name}\n")
 
 
     def stop(self):
@@ -97,7 +88,6 @@ class LiveNetworkSniffer:
         self.packet_handler_thread.join()
         self.finished_flow_thread.join()
         self.log_collector_thread.join()
-        self.log_writer_thread.join()
         for p in self.flow_handler_threads:
             p.join()
 
@@ -224,7 +214,8 @@ class LiveNetworkSniffer:
                     try:
                         del self.existing_flows[hashed_flow_id]
                     except KeyError:
-                        print(f"Flow {finished_flow} not found in existing flows.")
+                        continue
+                        # print(f"Flow {finished_flow} not found in existing flows.")
 
     def log_collector_worker(self):
         while not self.stop_sniffing.is_set():
@@ -265,10 +256,6 @@ class LiveNetworkSniffer:
             while not q.empty():
                 prediction = q.get()
                 self.write_log(prediction)
-        # while not self.log_writer_queue.empty():
-        #     prediction = self.log_writer_queue.get()
-        #     self.write_log(prediction)
-
 
     def run(self):
         try:
@@ -277,7 +264,7 @@ class LiveNetworkSniffer:
                 print(f"Number of captured packets: {self.packet_queue.qsize()}")
                 for i, q in enumerate(self.flow_handler_queues):
                     print(f"Number of packets in flow handler {i} queue: {q.qsize()}")
-                print(f"Number of flows in log writer queue: {self.log_writer_queue.qsize()}\n")
+                print()
         except KeyboardInterrupt:
             print("Keyboard interrupt received, stopping sniffer...")
             self.stop_sniffing.set()
@@ -285,14 +272,7 @@ class LiveNetworkSniffer:
             self.finish_jobs()
 
             # stop all threads
-            self.sniffer_thread.join()
-            self.packet_handler_thread.join()
-            self.finished_flow_thread.join()
-            self.log_collector_thread.join()
-            self.log_writer_thread.join()
-            for p in self.flow_handler_threads:
-                p.join()
-
+            self.stop()
             print("Sniffer thread joined, cleanup complete.")
 
 # Usage example

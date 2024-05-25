@@ -46,6 +46,21 @@ class NetworkFlowHandler:
         return
     prediction_duration = time.time() - start
 
+    flow_duration = extracted_features['duration']
+    fin_flag_counts = extracted_features['fin_flag_counts']
+    rst_flag_counts = extracted_features['rst_flag_counts']
+
+    finished_reason = ""
+    if flow_duration > self.config.max_flow_duration:
+      finished_reason = "max_flow_duration"
+    elif fin_flag_counts > 1:
+      finished_reason = "fin_flag_counts"
+    elif rst_flag_counts > 0:
+      finished_reason = "rst_flag_counts"
+    else:
+      finished_reason = "activity_timeout"
+
+
     result = {}
     result['flow_id'] = extracted_features['flow_id']
     result['timestamp'] = extracted_features['timestamp']
@@ -54,6 +69,9 @@ class NetworkFlowHandler:
     result['dst_ip'] = extracted_features['dst_ip']
     result['dst_port'] = extracted_features['dst_port']
     result['protocol'] = extracted_features['protocol']
+    result['flow_duration'] = extracted_features['duration']
+    result['finish_reason'] = finished_reason
+    result['predictor'] = self.model.name
     result['label'] = int(prediction[0])
     result['prediction_duration'] = prediction_duration
 
@@ -117,6 +135,7 @@ class NetworkFlowHandler:
     ended_flows = []
     for flow in self.ongoing_flows.values():
       if self.is_timeout_flow(flow):
+        flow.flow_last_seen = datetime.now().timestamp()
         ended_flows.append(str(flow))
     return ended_flows
 
