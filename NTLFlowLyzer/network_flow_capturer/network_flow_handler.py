@@ -85,10 +85,9 @@ class NetworkFlowHandler:
   
   def run(self, local_packet_queue: Queue, log_writer_queue: Queue, finished_flow_queue: Queue, stop_processing: Event, thread_finished: Event):
     while not stop_processing.is_set():
+      to_log = []
       if not local_packet_queue.empty():
         packet = local_packet_queue.get()
-        to_log = []
-        timeout_flows = self.search_ended_flows()
         current_flow_finished = self.add_packet_to_flow(packet)
         
         if current_flow_finished is not None:
@@ -99,16 +98,17 @@ class NetworkFlowHandler:
           to_log.append(self.predict_flow(flow))
           # print(f"Flow {current_flow_finished} is finished.")
         
-        for flow_id in timeout_flows:
-          if flow_id == current_flow_finished:
-            continue
-          flow = self.ongoing_flows.pop(flow_id)
-          finished_flow_queue.put(flow_id)
-          to_log.append(self.predict_flow(flow))
-          # print(f"Flow {flow_id} is timeout.")
+      timeout_flows = self.search_ended_flows()
+      for flow_id in timeout_flows:
+        if flow_id == current_flow_finished:
+          continue
+        flow = self.ongoing_flows.pop(flow_id)
+        finished_flow_queue.put(flow_id)
+        to_log.append(self.predict_flow(flow))
+        # print(f"Flow {flow_id} is timeout.")
 
-        for log in to_log:
-          log_writer_queue.put(log)
+      for log in to_log:
+        log_writer_queue.put(log)
 
     self.finish_jobs(local_packet_queue, log_writer_queue, finished_flow_queue)
     print("NetworkFlowHandler thread is finished.")
