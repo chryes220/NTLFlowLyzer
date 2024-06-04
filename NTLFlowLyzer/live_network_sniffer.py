@@ -2,6 +2,7 @@ from datetime import timezone
 import hashlib
 import json
 import logging
+import subprocess
 import sys
 import time
 import os
@@ -17,11 +18,17 @@ from NTLFlowLyzer.config_loader import ConfigLoader
 
 
 class LiveNetworkSniffer:
-    def __init__(self, iface: str, config: ConfigLoader, model='xgb-no-bot'):
+    def __init__(self, iface: str, config: ConfigLoader, model='xgb-no-bot', tcpdump=True):
         self.iface = iface
         self.config = config
         self.num_threads = 4
         self.log_filename = self.config.output_file_address
+        self.tcpdump = tcpdump
+
+        if self.tcpdump:
+            tcpdump_cmd = ["tcpdump", "-i", self.iface, "-w", "-", "-U"]
+            tcpdump_cmd.append(self.config.tcpdump_option)
+            self.sniffer_process = subprocess.Popen(tcpdump_cmd, stdout=subprocess.PIPE)
 
         self.stop_sniffing = Event()
 
@@ -153,7 +160,7 @@ class LiveNetworkSniffer:
                         break
                     # Decapsulate the inner packet
                     new_buf = bytes(eth.payload.payload.payload)
-                    print(f"Decapsulated packet: {new_buf}")
+                    # print(f"Decapsulated packet: {new_buf}")
                     eth = Ether(new_buf)
                 else:
                     decapsulation = False
@@ -203,7 +210,10 @@ class LiveNetworkSniffer:
 
     def start_sniffing(self):
         print(">> Sniffer started...")
-        sniff(iface=self.iface, prn=self.packet_queue.put, stop_filter=lambda p: self.stop_sniffing.is_set())
+        if self.tcpdump:
+            sniff(offline=self.sniffer_process.stdout, prn=self.packet_queue.put, stop_filter=lambda p: self.stop_sniffing.is_set())
+        else:
+            sniff(iface=self.iface, prn=self.packet_queue.put, stop_filter=lambda p: self.stop_sniffing.is_set())
         print(">> Sniffer stopped...")
 
     def finished_flow_handler(self):
@@ -270,6 +280,10 @@ class LiveNetworkSniffer:
             print("Keyboard interrupt received, stopping sniffer...")
             self.stop_sniffing.set()
         finally:
+            if self.tcpdump:
+                self.sniffer_process.terminate()
+                self.sniffer_process.wait()
+                
             self.finish_jobs()
 
             # stop all threads
